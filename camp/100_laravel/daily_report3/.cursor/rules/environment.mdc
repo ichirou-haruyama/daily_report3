@@ -2,39 +2,66 @@
 alwaysApply: true
 ---
 
-# 開発環境ルール
+# 開発環境ルール（個別）
 
-## 基本設定
-- プロジェクトタイプ: Laravel 12.x
-- 開発言語: PHP 8.4+
-- データベース: MySQL/MariaDB
-- コンテナ環境: Laravel Sail (Docker)
+## 前提
+- OS: macOS / Windows / Linux
+- PHP: 8.3+
+- Node: 20+
+- Composer: 2.6+
+- MariaDB: 10.6+（Docker/Sail推奨）
+- Laravel Sail or Valet/Localでも可
 
-## 開発ツール
-- バージョン管理: Git
-- 依存関係管理:
-- バックエンド: Composer
-- フロントエンド: npm
-- ビルドツール: Vite
+## .env（共通キー）
+- APP_NAME="RakuRakuPochittoNippo"
+- APP_ENV=local|staging|production
+- APP_DEBUG=true（本番はfalse）
+- APP_URL=https://{env-domain}
 
-## コーディング規約
-- PSR-12準拠のコードフォーマット
-- インデント: スペース4個
-- 日本語でのコメント記述
-- PHPDoc コメントの必須化
+### DB
+- DB_CONNECTION=mysql
+- DB_HOST=127.0.0.1
+- DB_PORT=3306
+- DB_DATABASE=rrpn
+- DB_USERNAME=rrpn_user
+- DB_PASSWORD=（各自）
 
-## テスト環境
-- PHPUnit/Pestテストフレームワーク
-- テストカバレッジ目標: 70%以上
-- 新機能実装時のテスト必須
+### 認証・暗号
+- APP_KEY は `php artisan key:generate` で発行
+- SESSION_DRIVER=database
+- SESSION_LIFETIME=120
 
-## ドキュメント管理
-- READMEの日本語記述
-- API仕様書の維持
-- データベース設計図の更新
-- 環境構築手順の文書化
+### ストレージ
+- FILESYSTEM_DISK=local（本番は s3）
+- S3_* は本番のみ設定
 
-## エイリアス
+### メール
+- MAIL_MAILER=log（本番はsmtp）
+- テスト時は Mailhog/Resend等を利用
 
-php = "./vendor/bin/sail"
-composer = "./vendor/bin/sail composer"
+### Google Sheets 参照設定
+- GOOGLE_SHEETS_PROJECT_ID=
+- GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON_PATH=storage/app/keys/google_sa.json
+- GOOGLE_SHEETS_DRIVE_SCOPES="https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/spreadsheets.readonly"
+- GOOGLE_SHEETS_SPREADSHEET_ID=（工事台帳のID）
+- GOOGLE_SHEETS_RANGE="工事台帳!A:Z"（シート名!範囲）
+
+### キャッシュ・キュー
+- CACHE_DRIVER=redis|file（ローカルはfile可）
+- QUEUE_CONNECTION=sync（本番はredis）
+
+## ローカルセットアップ手順（標準）
+1) `cp .env.example .env`
+2) `.env` を各自編集（DB/Google Keysなど）
+3) `composer install && npm ci && npm run build`
+4) `php artisan key:generate`
+5) Sailの場合 `./vendor/bin/sail up -d && ./vendor/bin/sail artisan migrate --seed`
+6) Googleサービスアカウント鍵JSONを `storage/app/keys/google_sa.json` へ配置（.gitignore）
+
+## セキュリティ
+- `.env` と `storage/app/keys` は必ずGit管理外
+- 個人環境のDBパスワードはチーム内共有禁止
+- OSキーチェーン/Passkeysで管理
+
+## ブランチローカル名
+- `{issue#}-{short-topic}` 例: `123-login-form`
