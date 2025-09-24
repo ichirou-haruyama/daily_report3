@@ -24,6 +24,11 @@ Route::middleware(['auth'])->group(function () {
 
     // 作業日報検索
     Volt::route('reports/search', 'reports.search')->name('reports.search');
+
+    // 作業日報 作成/車両費/その他
+    Volt::route('reports/create', 'reports.create')->name('reports.create');
+    Volt::route('reports/vehicle-costs', 'reports.vehicle-costs')->name('reports.vehicle_costs');
+    Volt::route('reports/other', 'reports.other')->name('reports.other');
 });
 
 require __DIR__ . '/auth.php';
