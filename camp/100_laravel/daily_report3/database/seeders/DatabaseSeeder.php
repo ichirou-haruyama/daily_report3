@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Database\Seeders\MemoSeeder;
 use Database\Seeders\UserSeeder;
+use Database\Seeders\VehicleSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -19,6 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             UserSeeder::class,
             MemoSeeder::class,
+            VehicleSeeder::class,
         ]);
     }
 }
