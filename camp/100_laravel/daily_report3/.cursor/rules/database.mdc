@@ -4,6 +4,132 @@ alwaysApply: true
 
 # データベースルール
 
-## テーブル定義
+## 目的
+- 認証（社内配布のGmailアドレス + 発行パスワード）
+- 作業日報データの永続化（1日1ユーザー複数現場も可）
+- 添付ファイル・写真、打刻、外注用QRアクセスの管理
+- Google スプレッドシートの工事台帳を「参照しつつ」ローカルDBにキャッシュ（検索高速化と可用性担保）
 
-## シーディング
+## スキーマ（MariaDB）
+
+### users
+- id (BIGINT, PK, AI)
+- name (VARCHAR 100) : 表示名
+- email (VARCHAR 191, UNIQUE) : Gmailアドレス
+- password (VARCHAR 255) : ハッシュ（argon2id 推奨）
+- role (ENUM['admin','member','partner'] default 'member')
+- remember_token (VARCHAR 100) nullable
+- email_verified_at (TIMESTAMP) nullable
+- created_at/updated_at (TIMESTAMP)
+- INDEX: (email)
+
+### password_resets（Laravel標準に準拠／必要に応じて）
+- email (VARCHAR 191)
+- token (VARCHAR 255)
+- created_at (TIMESTAMP)
+
+### projects（任意：社内管理用。実体はSheetsだが最小メタを保持したい場合）
+- id (BIGINT, PK, AI)
+- construction_id (VARCHAR 64, UNIQUE) : 工事ID（Sheetsのキー）
+- prime_contractor (VARCHAR 191) : 元請
+- site_name (VARCHAR 191) : 現場名
+- subject (VARCHAR 191) : 件名
+- status (ENUM['active','closed'] default 'active')
+- last_synced_at (TIMESTAMP) : Sheets→Cache同期時刻
+- created_at/updated_at
+
+### sheets_constructions_cache（Sheetsからの検索用キャッシュ）
+- id (BIGINT, PK, AI)
+- construction_id (VARCHAR 64, INDEX)
+- prime_contractor (VARCHAR 191, INDEX)
+- site_name (VARCHAR 191, INDEX)
+- subject (VARCHAR 191, INDEX)
+- raw_json (JSON) : シート行の生データ
+- synced_at (TIMESTAMP) : 取得時刻
+
+### daily_reports（日報ヘッダ）
+- id (BIGINT, PK, AI)
+- user_id (BIGINT, FK→users.id, INDEX)
+- report_date (DATE, INDEX)
+- construction_id (VARCHAR 64, INDEX) : シート上の工事ID
+- work_summary (TEXT) : 本日の概要
+- weather (VARCHAR 32) : 天候（任意）
+- start_time (TIME) nullable
+- end_time (TIME) nullable
+- total_hours (DECIMAL(5,2)) nullable
+- status (ENUM['draft','submitted','approved','rejected'] default 'draft')
+- created_at/updated_at
+- UNIQUE(user_id, report_date, construction_id)  ※必要に応じ解除
+
+### daily_report_items（日報明細）
+- id (BIGINT, PK, AI)
+- daily_report_id (BIGINT, FK→daily_reports.id, INDEX)
+- task_name (VARCHAR 191)
+- description (TEXT) nullable
+- quantity (DECIMAL(10,2)) nullable
+- unit (VARCHAR 32) nullable
+- hours (DECIMAL(5,2)) nullable
+- created_at/updated_at
+
+### time_entries（打刻・稼働）
+- id (BIGINT, PK, AI)
+- daily_report_id (BIGINT, FK→daily_reports.id, INDEX)
+- started_at (DATETIME)
+- ended_at (DATETIME) nullable
+- break_minutes (INT) default 0
+- created_at/updated_at
+
+### attachments（添付）
+- id (BIGINT, PK, AI)
+- daily_report_id (BIGINT, FK→daily_reports.id, INDEX)
+- path (VARCHAR 255) : storage相対パス
+- original_name (VARCHAR 255)
+- mime_type (VARCHAR 100)
+- size_bytes (BIGINT)
+- created_at/updated_at
+
+### partner_access_tokens（外注/協力会社向け一時アクセス）
+- id (BIGINT, PK, AI)
+- construction_id (VARCHAR 64, INDEX)
+- token (CHAR 64, UNIQUE)
+- valid_from (DATETIME)
+- valid_until (DATETIME)
+- is_revoked (BOOLEAN) default 0
+- created_by (BIGINT, FK→users.id) : 発行者
+- created_at/updated_at
+
+## リレーション
+- users 1—* daily_reports
+- daily_reports 1—* daily_report_items / time_entries / attachments
+- construction_id は Sheets 側のキーに合わせる
+
+## 制約・バリデーション方針
+- email: RFC準拠 + MX検証は任意（運用ポリシーで）
+- password: 最低12桁、英大小・数字・記号のうち3種以上
+- construction_id: 必須。Sheetsで存在しないIDは保存前チェック（API or Cache）
+- daily_report: report_date は当日±90日（運用次第で変更）
+
+## インデックス設計
+- sheets_constructions_cache: construction_id / prime_contractor / site_name / subject に複合・単体インデックス
+- daily_reports: (user_id, report_date), (construction_id), (status)
+
+## テストデータ（サンプルSeeder記述例）
+- users:
+  - admin@example.com / Pass!word-1234 / role=admin
+  - member01@example.com / Pass!word-1234 / role=member
+- sheets_constructions_cache（例）
+  - {construction_id: "C-2025-001", prime_contractor: "ABC建設", site_name: "盛岡第一", subject: "受電盤更新"}
+  - {construction_id: "C-2025-002", prime_contractor: "XYZ工業", site_name: "紫波変電", subject: "ケーブル更新"}
+- daily_reports:
+  - user=member01, date=2025-09-20, construction_id="C-2025-001", status="submitted"
+- daily_report_items:
+  - task_name="盤撤去", quantity=1, unit="式", hours=3.5
+  - task_name="新設据付", quantity=1, unit="式", hours=4.0
+
+## マイグレーション命名規則
+- {YYYY_MM_DD_HHMMSS}_create_{table}_table.php
+- 外部キーは onDelete('cascade') を基本、履歴保持が必要な場合は restrict を検討
+
+## データ保持・バックアップ
+- 本番DB: 毎日フル + 1時間ごと差分（7日保持）
+- 添付: S3/Cloud Storage 推奨、Lifecycleで90日後に低頻度へ移行

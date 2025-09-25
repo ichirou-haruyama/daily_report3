@@ -2,61 +2,78 @@
 alwaysApply: true
 ---
 
-# Laravelルール
+# Laravel ルール
 
-## アーキテクチャ
-- MVCアーキテクチャの遵守
-- Fat-Componentアーキテクチャの採用
-- SOLIDの原則に基づく設計
-- 依存性注入とサービスコンテナの活用
+## バージョン
+- Laravel 12.x を前提
+- Livewire v3 + VoltをUI標準
 
-## コード構造
-- Laravelの標準ディレクトリ構造に従う
-- ダッシュ付き小文字でのディレクトリ命名
-- 説明的な変数名とメソッド名の使用
-- 厳密な型指定（declare(strict_types=1)）
+## 認証
+- Breeze(+Livewire) または Fortify + Livewire
+- ログインID: Gmailアドレス（※OAuthは今回は非必須）
+- パスワードポリシー: 12+文字、3種以上（大小/数字/記号）
+- Remember me: 任意
+- 2FA: 本番は有効化（TOTP推奨）
 
-## データベース操作
-- Eloquent ORMの使用必須
-- 生のSQLクエリの使用禁止
-- クエリビルダーの適切な活用
-- N+1問題への対策必須
-- 適切なマイグレーションとシーダーの実装
+## 認可
+- Gate/Policyで role: admin/member/partner を判定
+- 日報の閲覧/編集は `user_id == auth()->id()` を基本
+- admin は全権、partner はトークンの範囲（construction_id）内のみ
 
-## セキュリティ
-- Policyベースの認可制御
-- 環境変数による機密情報管理
-- XSS対策の必須化
-- CSRF対策の必須化
-- SQLインジェクション対策
+## ルーティング
+- 基本は Volt::route を使用
+- APIは `/api/v1/*` に集約（検索や同期など）
+- 例:
+  - `/login`, `/logout`, `/register`(必要なら)
+  - `/reports`（一覧/検索）
+  - `/reports/{id}`（詳細）
+  - `/reports/create?construction_id=...`
+  - `/projects/search`（Sheetsキャッシュ検索API）
+
+## 例外・ログ
+- 予期せぬ例外は Sentry 等に送信（本番）
+- 監査ログ（誰が・いつ・何を）: 日報提出/承認/差戻しを記録
+
+## バリデーション共通
+- FormRequest を優先
+- ルールは `rules()` に集約、メッセージは lang/ja を整備
+- 例（daily_reports.store）:
+  - construction_id: required|string|max:64|exists:sheets_constructions_cache,construction_id
+  - report_date: required|date|after_or_equal:now-90 days|before_or_equal:now+7 days
+  - items.*.task_name: required|string|max:191
+
+## ファイルアップロード
+- `storage/app/report_attachments/{YYYY}/{MM}/...`
+- 10MB/1ファイル上限、合計100MB/日報
+- 拡張子: jpg/png/pdf/xlsx/docx（要審査）
+- ウイルススキャン（本番はClamAV等）
+
+## Google Sheets 連携
+- サービスアカウントで read-only
+- 起動時 or CRONで `sheets_constructions_cache` を同期（差分取り込み）
+- API障害時はキャッシュで検索継続
+- 同期コマンド例: `php artisan sheets:sync --range="工事台帳!A:Z"`
+
+## 検索仕様（工事ID/元請/現場名/件名）
+- 入力: `construction_id` または（site_name/subject/prime_contractor の部分一致）
+- 優先度: ID一致 > 完全一致 > 部分一致
+- 速度要件: ローカルキャッシュ + LIKE/INSTR インデックス活用
+
+## テスト
+- Pest or PHPUnit
+- Feature: 認証、権限制御、日報作成/提出/承認
+- Integration: Sheets同期、検索API
+- 最低行うスモーク: `/login` 200、`/reports` ログイン必須
+
+## 国際化
+- 既定 ja_JP、時区間は Asia/Tokyo
+- Carbon/金額等のローカライズ統一
 
 ## パフォーマンス
-- キャッシュの適切な利用
-- クエリのチューニング
-- データベースインデックスの最適化
-- ジョブキューの活用
+- N+1防止（with）
+- キャッシュはタグ付き（reports:user:{id}:date:{Ymd}）
+- 画像はサムネイル生成（intervention/image等）
 
-## 認証/認可
-- Livewire Starter Kitの活用
-- ロールベースのアクセス制御（RBAC）
-- セッション管理の適切な実装
-- 2要素認証のサポート
-- パスワードリセットフローの実装
-
-## エラー処理
-- Laravelの例外処理機能の活用
-- カスタム例外の適切な作成
-- try-catchブロックの適切な使用
-- エラーロギングの実装
-
-## Shell
-
-```jsonc
-{
-  "shell": {
-    "php": "./vendor/bin/sail",
-    "composer": "./vendor/bin/sail composer",
-    "npm": "./vendor/bin/sail npm"
-  }
-}
-```
+## デプロイ
+- Envごとに `php artisan config:cache` / `route:cache` / `view:cache`
+- 失敗時ロールバック（DB: migrate --pretend で検証）

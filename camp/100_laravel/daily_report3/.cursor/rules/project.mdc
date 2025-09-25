@@ -1,10 +1,81 @@
 ---
+
+## project.mdc（プロジェクト共通ルール）
+
+```md
+---
 alwaysApply: true
 ---
 
-# プロジェクトルール
+# プロジェクト共通ルール
 
-## 概要
+## 目的
+- 「らくラクポチッと日報」開発・運用の品質/速度/安全性を統一
 
-メモを管理するアプリ
-Copy
+## 管理
+- リポジトリ: GitHub Private
+- ブランチ: main（保護） / develop / feature/*
+- PR: 最低1名レビュー、CIグリーン必須、Squash Merge
+- Issue: テンプレ（概要/再現手順/期待/実際/スクショ/環境）
+
+## コード規約
+- PHP: PSR-12、静的解析 Psalm/Larastan（レベルは段階的に上げる）
+- 命名: 英語、スネーク（DB）, キャメル（PHP）
+- Controller薄く、Service/Action/Repositoryへ分離
+- BladeはPartial化、複雑なロジックは書かない
+
+## CI/CD
+- CI（GitHub Actions）
+  - lint（phpcs）, static-analyze, phpunit, pest, build（npm）
+- CD
+  - stagingへ自動デプロイ（mainへマージ時）
+  - productionは手動承認付き
+- 環境差分: Env毎にAPP_URL, DB, S3, Mail を変更
+
+## シークレット管理
+- GitHub Secrets／1Password/Secret Manager
+- `.env`は配布スクリプト（SOPS等）で安全共有
+
+## ログ/監視
+- 監視: Uptime, Error（Sentry/NewRelic）
+- 重要操作は監査テーブル/ログへ（提出/承認/差戻し）
+
+## リリース
+- セマンティックバージョニング（MAJOR.MINOR.PATCH）
+- CHANGELOGを毎リリース更新
+
+## 品質保証
+- 定期リグレッション（主要フロー）
+- E2E（Dusk/Playwright）でログイン〜日報提出
+- アクセシビリティ簡易チェック（aria/コントラスト）
+
+## セキュリティ
+- 2FA（本番）
+- 失敗ログインのレート制限
+- アップロードウイルス対策
+- 依存パッケージの脆弱性監視（Dependabot）
+
+## データ保護・バックアップ
+- DB/S3の自動バックアップ（retention: 30日）
+- 復旧手順書をリポジトリ `docs/` に配置
+
+## パートナー（外注）フロー
+- 管理者が `partner_access_tokens` を発行
+- 有効期間＝工事期間（valid_from～valid_until）
+- 終了/精算後は `is_revoked=1` または有効期限切れ
+- パートナー入力範囲は construction_id 単位
+
+## Google Sheets 運用
+- 版管理：オーナーが変更履歴を定期レビュー
+- カラム固定（例）
+  - A: 工事ID（必須・ユニーク）
+  - B: 元請
+  - C: 現場名
+  - D: 件名
+  - 以降は任意項目
+- 変更が検索に影響するため、列名変更はIssue経由で合意
+- 同期はCRON（例：15分間隔）、緊急時は手動コマンド
+
+## ドキュメント
+- 本ファイル群（*.mdc）は `docs/rules/` 配下に保存
+- 変更時はPRに含め、レビュア割当

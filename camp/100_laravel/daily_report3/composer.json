@@ -13,7 +13,9 @@
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "livewire/flux": "^2.1.1",
-        "livewire/volt": "^1.7"
+        "livewire/volt": "^1.7",
+        "google/apiclient": "^2.18",
+        "google/apiclient-services": "^0.360"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.16",
