@@ -12,7 +12,8 @@ state([
     'moveEnd' => '',
     'fromLocation' => '',
     'toLocation' => '',
-    'hasToll' => null,
+    'distanceKm' => '',
+    'tollNotUsed' => false,
     'tollEntry' => '',
     'tollExit' => '',
     'tollAmount' => '',
@@ -25,6 +26,7 @@ rules([
     'moveEnd' => ['nullable', 'string'],
     'fromLocation' => ['nullable', 'string', 'max:191'],
     'toLocation' => ['nullable', 'string', 'max:191'],
+    'distanceKm' => ['nullable', 'numeric', 'min:0'],
     'tollEntry' => ['nullable', 'string', 'max:191'],
     'tollExit' => ['nullable', 'string', 'max:191'],
     'tollAmount' => ['nullable', 'numeric', 'min:0'],
@@ -37,17 +39,40 @@ $selectVehicle = function (int $vehicleId) {
     $this->vehicleId = $vehicleId;
 };
 
-$chooseHasToll = function (bool $value) {
-    $this->hasToll = $value;
-    if ($value === true) {
-        $this->locked = true; // ここまでの入力を確定
-        return;
-    }
-    return redirect()->route('reports.other');
-};
+$goToConfirm = function () {
+    // 必須バリデーション
+    $baseRules = [
+        'fromLocation' => ['required', 'string', 'max:191'],
+        'toLocation' => ['required', 'string', 'max:191'],
+        'distanceKm' => ['required', 'numeric', 'min:0'],
+    ];
 
-$continueToOther = function () {
-    return redirect()->route('reports.other');
+    if ($this->tollNotUsed) {
+        $rules = $baseRules; // 高速未使用の場合は高速関連は任意
+    } else {
+        $rules = array_merge($baseRules, [
+            'tollEntry' => ['required', 'string', 'max:191'],
+            'tollExit' => ['required', 'string', 'max:191'],
+            'tollAmount' => ['required', 'numeric', 'min:0'],
+        ]);
+    }
+
+    $this->validate($rules);
+
+    session()->put('vehicle_cost_input', [
+        'vehicleId' => $this->vehicleId,
+        'moveStart' => $this->moveStart,
+        'moveEnd' => $this->moveEnd,
+        'fromLocation' => $this->fromLocation,
+        'toLocation' => $this->toLocation,
+        'distanceKm' => $this->distanceKm,
+        'tollNotUsed' => $this->tollNotUsed,
+        'tollEntry' => $this->tollEntry,
+        'tollExit' => $this->tollExit,
+        'tollAmount' => $this->tollAmount,
+    ]);
+
+    return redirect()->route('reports.vehicle_costs.confirm');
 };
 ?>
 
@@ -107,30 +132,33 @@ $continueToOther = function () {
             </div>
         </div>
 
-        <div class="space-y-3">
-            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">高速料金</h2>
-            <div class="flex gap-3">
-                <button type="button" wire:click="chooseHasToll(true)"
-                    class="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white
-                        {{ $hasToll === true ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-500 hover:bg-emerald-600' }}">
-                    有り
-                </button>
-                <button type="button" wire:click="chooseHasToll(false)"
-                    class="inline-flex items-center rounded-md px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700">
-                    無し
-                </button>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">移動距離（km）</label>
+                <input type="number" min="0" step="0.1" inputmode="decimal" wire:model.live="distanceKm"
+                    class="mt-1 block w-48 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    @disabled($locked) />
             </div>
+        </div>
 
-            @if ($hasToll === true)
+        <div class="space-y-3">
+            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">高速道路の利用</h2>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
+                <input type="checkbox" wire:model.live="tollNotUsed"
+                    class="rounded border-gray-300 dark:border-gray-700" />
+                高速道路は使用していない
+            </label>
+
+            @if (!$tollNotUsed)
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">入場場所</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">入場IC</label>
                         <input type="text" wire:model.live="tollEntry" maxlength="191" placeholder="例）盛岡南 IC"
                             class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
                     </div>
                     @if (filled($tollEntry))
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">退場場所</label>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">退場IC</label>
                             <input type="text" wire:model.live="tollExit" maxlength="191" placeholder="例）紫波 IC"
                                 class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
                         </div>
@@ -144,15 +172,15 @@ $continueToOther = function () {
                         </div>
                     @endif
                 </div>
+            @endif
 
-                @if (filled($tollEntry) && filled($tollExit) && filled($tollAmount))
-                    <div>
-                        <button type="button" wire:click="continueToOther"
-                            class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                            次へ（その他の入力）
-                        </button>
-                    </div>
-                @endif
+            @if ($tollNotUsed || (filled($tollEntry) && filled($tollExit) && filled($tollAmount)))
+                <div>
+                    <button type="button" wire:click="goToConfirm"
+                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                        入力内容を確認する
+                    </button>
+                </div>
             @endif
         </div>
 

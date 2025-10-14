@@ -28,6 +28,7 @@ Route::middleware(['auth'])->group(function () {
     // 作業日報 作成/車両費/その他
     Volt::route('reports/create', 'reports.create')->name('reports.create');
     Volt::route('reports/vehicle-costs', 'reports.vehicle-costs')->name('reports.vehicle_costs');
+    Volt::route('reports/vehicle-costs/confirm', 'reports.vehicle-costs-confirm')->name('reports.vehicle_costs.confirm');
     Volt::route('reports/other', 'reports.other')->name('reports.other');
 });
 
