@@ -75,6 +75,25 @@ $recalculate = function () use ($toMinutes) {
     $this->adjustedHours = round($adjusted / 60, 2);
     $this->showDetails = true;
 };
+
+/**
+ * 車両費入力へ進む前に、日報入力内容をセッションへ保存
+ */
+$proceedToVehicleCosts = function () {
+    // 表示上は $canProceed でガード済みだが、念のため簡易バリデーション
+    $this->validate([
+        'workSummary' => ['required', 'string', 'max:2000'],
+    ]);
+
+    session()->put('daily_report_input', [
+        'startTime' => $this->startTime,
+        'endTime' => $this->endTime,
+        'adjustedHours' => $this->adjustedHours,
+        'workSummary' => $this->workSummary,
+    ]);
+
+    return redirect()->route('reports.vehicle_costs');
+};
 ?>
 
 <section class="max-w-3xl mx-auto p-6">
@@ -120,8 +139,8 @@ $recalculate = function () use ($toMinutes) {
         @php($canProceed = $showDetails && filled($workSummary))
         @if ($canProceed)
             <div class="flex gap-3">
-                <a href="{{ route('reports.vehicle_costs') }}"
-                    class="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">車両費を入力する</a>
+                <button type="button" wire:click="proceedToVehicleCosts"
+                    class="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">車両費を入力する</button>
                 <a href="{{ route('reports.other') }}"
                     class="inline-flex items-center rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">車両費を入力せずその他へ</a>
             </div>

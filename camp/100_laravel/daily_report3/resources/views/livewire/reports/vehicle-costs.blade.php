@@ -17,6 +17,16 @@ state([
     'tollEntry' => '',
     'tollExit' => '',
     'tollAmount' => '',
+    // 復路（帰り）
+    'returnMoveStart' => '',
+    'returnMoveEnd' => '',
+    'returnFromLocation' => '',
+    'returnToLocation' => '',
+    'returnDistanceKm' => '',
+    'returnTollNotUsed' => false,
+    'returnTollEntry' => '',
+    'returnTollExit' => '',
+    'returnTollAmount' => '',
     'locked' => false,
 ]);
 
@@ -30,6 +40,15 @@ rules([
     'tollEntry' => ['nullable', 'string', 'max:191'],
     'tollExit' => ['nullable', 'string', 'max:191'],
     'tollAmount' => ['nullable', 'numeric', 'min:0'],
+    // 復路（帰り）
+    'returnMoveStart' => ['nullable', 'string'],
+    'returnMoveEnd' => ['nullable', 'string'],
+    'returnFromLocation' => ['nullable', 'string', 'max:191'],
+    'returnToLocation' => ['nullable', 'string', 'max:191'],
+    'returnDistanceKm' => ['nullable', 'numeric', 'min:0'],
+    'returnTollEntry' => ['nullable', 'string', 'max:191'],
+    'returnTollExit' => ['nullable', 'string', 'max:191'],
+    'returnTollAmount' => ['nullable', 'numeric', 'min:0'],
 ]);
 
 $selectVehicle = function (int $vehicleId) {
@@ -37,6 +56,34 @@ $selectVehicle = function (int $vehicleId) {
         return;
     }
     $this->vehicleId = $vehicleId;
+};
+
+$copyReturnFromOutbound = function () {
+    if ($this->locked) {
+        return;
+    }
+    // 時刻（往路の終了→帰りの開始、往路の開始→帰りの終了）
+    $this->returnMoveStart = $this->moveEnd;
+    $this->returnMoveEnd = $this->moveStart;
+
+    // 地点（往路の到着→帰りの出発、往路の出発→帰りの到着）
+    $this->returnFromLocation = $this->toLocation;
+    $this->returnToLocation = $this->fromLocation;
+
+    // 距離はそのままコピー
+    $this->returnDistanceKm = $this->distanceKm;
+
+    // 高速利用の有無と詳細
+    $this->returnTollNotUsed = $this->tollNotUsed;
+    if ($this->tollNotUsed) {
+        $this->returnTollEntry = '';
+        $this->returnTollExit = '';
+        $this->returnTollAmount = '';
+    } else {
+        $this->returnTollEntry = $this->tollExit;
+        $this->returnTollExit = $this->tollEntry;
+        $this->returnTollAmount = $this->tollAmount;
+    }
 };
 
 $goToConfirm = function () {
@@ -57,6 +104,25 @@ $goToConfirm = function () {
         ]);
     }
 
+    // 復路の必須チェック（復路を入力する場合は一式必須）
+    $hasReturnAny = filled($this->returnFromLocation) || filled($this->returnToLocation) || filled($this->returnDistanceKm) || filled($this->returnTollEntry) || filled($this->returnTollExit) || filled($this->returnTollAmount);
+    if ($hasReturnAny) {
+        $returnBase = [
+            'returnFromLocation' => ['required', 'string', 'max:191'],
+            'returnToLocation' => ['required', 'string', 'max:191'],
+            'returnDistanceKm' => ['required', 'numeric', 'min:0'],
+        ];
+        if ($this->returnTollNotUsed) {
+            $rules = array_merge($rules, $returnBase);
+        } else {
+            $rules = array_merge($rules, $returnBase, [
+                'returnTollEntry' => ['required', 'string', 'max:191'],
+                'returnTollExit' => ['required', 'string', 'max:191'],
+                'returnTollAmount' => ['required', 'numeric', 'min:0'],
+            ]);
+        }
+    }
+
     $this->validate($rules);
 
     session()->put('vehicle_cost_input', [
@@ -70,6 +136,16 @@ $goToConfirm = function () {
         'tollEntry' => $this->tollEntry,
         'tollExit' => $this->tollExit,
         'tollAmount' => $this->tollAmount,
+        // 復路（帰り）
+        'returnMoveStart' => $this->returnMoveStart,
+        'returnMoveEnd' => $this->returnMoveEnd,
+        'returnFromLocation' => $this->returnFromLocation,
+        'returnToLocation' => $this->returnToLocation,
+        'returnDistanceKm' => $this->returnDistanceKm,
+        'returnTollNotUsed' => $this->returnTollNotUsed,
+        'returnTollEntry' => $this->returnTollEntry,
+        'returnTollExit' => $this->returnTollExit,
+        'returnTollAmount' => $this->returnTollAmount,
     ]);
 
     return redirect()->route('reports.vehicle_costs.confirm');
@@ -174,17 +250,99 @@ $goToConfirm = function () {
                 </div>
             @endif
 
-            @if ($tollNotUsed || (filled($tollEntry) && filled($tollExit) && filled($tollAmount)))
+
+        </div>
+
+        <div class="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-3">
+            <div class="flex items-center justify-between">
+                <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">復路（帰り）の入力</h2>
+                <button type="button" wire:click="copyReturnFromOutbound"
+                    class="inline-flex items-center rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 hover:bg-emerald-100"
+                    @disabled($locked)>
+                    往路→復路 逆転コピー
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <button type="button" wire:click="goToConfirm"
-                        class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-                        入力内容を確認する
-                    </button>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">移動開始時間（帰り）</label>
+                    <input type="time" step="300" wire:model.live="returnMoveStart"
+                        class="mt-1 block w-40 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        @disabled($locked) />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">到着時刻（帰り）</label>
+                    <input type="time" step="300" wire:model.live="returnMoveEnd"
+                        class="mt-1 block w-40 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        @disabled($locked) />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">出発地（帰り）</label>
+                    <input type="text" wire:model.live="returnFromLocation" maxlength="191" placeholder="例）現場"
+                        class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        @disabled($locked) />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">到着地（帰り）</label>
+                    <input type="text" wire:model.live="returnToLocation" maxlength="191" placeholder="例）本社"
+                        class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        @disabled($locked) />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">移動距離（km, 帰り）</label>
+                    <input type="number" min="0" step="0.1" inputmode="decimal"
+                        wire:model.live="returnDistanceKm"
+                        class="mt-1 block w-48 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        @disabled($locked) />
+                </div>
+            </div>
+
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">高速道路の利用（帰り）</h3>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
+                <input type="checkbox" wire:model.live="returnTollNotUsed"
+                    class="rounded border-gray-300 dark:border-gray-700" />
+                高速道路は使用していない（帰り）
+            </label>
+
+            @if (!$returnTollNotUsed)
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">入場IC（帰り）</label>
+                        <input type="text" wire:model.live="returnTollEntry" maxlength="191"
+                            placeholder="例）紫波 IC"
+                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+                    </div>
+                    @if (filled($returnTollEntry))
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">退場IC（帰り）</label>
+                            <input type="text" wire:model.live="returnTollExit" maxlength="191"
+                                placeholder="例）盛岡南 IC"
+                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+                        </div>
+                    @endif
+                    @if (filled($returnTollEntry) && filled($returnTollExit))
+                        <div class="sm:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">高速料金（円,
+                                帰り）</label>
+                            <input type="number" min="0" step="1" inputmode="numeric"
+                                wire:model.live="returnTollAmount"
+                                class="mt-1 block w-48 rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+                        </div>
+                    @endif
                 </div>
             @endif
         </div>
 
         <div class="flex gap-3">
+            <button type="button" wire:click="goToConfirm"
+                class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                入力内容を確認する
+            </button>
             <a href="{{ route('reports.create') }}"
                 class="inline-flex items-center rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">日報作成に戻る</a>
         </div>

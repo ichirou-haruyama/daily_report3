@@ -10,7 +10,7 @@ state([
     'data' => [],
 ]);
 
-$mount = function () {
+$boot = function () {
     $stored = session()->get('vehicle_cost_input');
     if (!$stored) {
         return redirect()->route('reports.vehicle_costs');
@@ -70,6 +70,53 @@ $proceed = function () {
                 </div>
             @endif
         </dl>
+
+        @php($hasReturn = filled($data['returnFromLocation'] ?? null) || filled($data['returnToLocation'] ?? null) || filled($data['returnDistanceKm'] ?? null))
+        @if ($hasReturn)
+            <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-3">復路（帰り）</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <dt class="text-xs text-gray-500">出発地（帰り）</dt>
+                        <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                            {{ $data['returnFromLocation'] ?? '' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">到着地（帰り）</dt>
+                        <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                            {{ $data['returnToLocation'] ?? '' }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">移動距離（帰り）</dt>
+                        <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                            {{ $data['returnDistanceKm'] ?? '' }} km</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">高速利用（帰り）</dt>
+                        <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                            {{ $data['returnTollNotUsed'] ?? false ? '未使用' : '使用' }}
+                        </dd>
+                    </div>
+                    @if (!($data['returnTollNotUsed'] ?? false))
+                        <div>
+                            <dt class="text-xs text-gray-500">入場IC（帰り）</dt>
+                            <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                                {{ $data['returnTollEntry'] ?? '' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-gray-500">退場IC（帰り）</dt>
+                            <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                                {{ $data['returnTollExit'] ?? '' }}</dd>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <dt class="text-xs text-gray-500">高速料金（帰り）</dt>
+                            <dd class="text-sm font-medium text-gray-800 dark:text-gray-100">
+                                {{ number_format((int) ($data['returnTollAmount'] ?? 0)) }} 円</dd>
+                        </div>
+                    @endif
+                </dl>
+            </div>
+        @endif
 
         <div class="flex gap-3">
             <button type="button" wire:click="back"
