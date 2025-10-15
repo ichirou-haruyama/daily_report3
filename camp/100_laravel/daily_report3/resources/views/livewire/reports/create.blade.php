@@ -7,6 +7,7 @@ layout('components.layouts.app');
 title('作業日報 作成');
 
 state([
+    'constructionId' => '', // 検索画面からの工事ID
     'startTime' => '', // HH:MM
     'endTime' => '', // HH:MM
     'adjustedHours' => null, // 自動計算された労務時間（昼休/小休控除後）
@@ -15,10 +16,21 @@ state([
 ]);
 
 rules([
+    'constructionId' => ['nullable', 'string', 'max:64'],
     'startTime' => ['nullable', 'string'],
     'endTime' => ['nullable', 'string'],
     'workSummary' => ['nullable', 'string', 'max:2000'],
 ]);
+
+/**
+ * 初期化時にクエリパラメータの工事IDを保持
+ */
+$boot = function () {
+    $cid = (string) request()->query('construction_id', '');
+    if ($cid !== '') {
+        $this->constructionId = $cid;
+    }
+};
 
 /**
  * HH:MM を分に変換
@@ -86,6 +98,7 @@ $proceedToVehicleCosts = function () {
     ]);
 
     session()->put('daily_report_input', [
+        'constructionId' => $this->constructionId,
         'startTime' => $this->startTime,
         'endTime' => $this->endTime,
         'adjustedHours' => $this->adjustedHours,
@@ -103,6 +116,12 @@ $proceedToVehicleCosts = function () {
     </div>
 
     <div class="bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800 rounded-lg p-5 space-y-6">
+
+        @if (filled($constructionId))
+            <div class="text-sm text-gray-600 dark:text-gray-300">
+                選択中の工事ID: <span class="font-medium">{{ $constructionId }}</span>
+            </div>
+        @endif
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

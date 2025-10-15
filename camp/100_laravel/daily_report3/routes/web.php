@@ -2,14 +2,26 @@
 
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
+use App\Models\DailyReport;
 
 Route::get('/', function () {
-    return view('welcome');
+    return view('home');
 })->name('home');
 
-Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
+Route::get('dashboard', function () {
+    $query = DailyReport::with('user')->orderByDesc('created_at');
+
+    $user = request()->user();
+    if ($user?->role !== 'admin') {
+        $query->where('user_id', $user?->id);
+    }
+
+    $reports = $query->paginate(20);
+
+    return view('dashboard', [
+        'reports' => $reports,
+    ]);
+})->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
