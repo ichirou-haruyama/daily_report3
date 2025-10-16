@@ -9,7 +9,7 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('dashboard', function () {
-    $query = DailyReport::with('user')->orderByDesc('created_at');
+    $query = DailyReport::with(['user', 'vehicleCost.tolls'])->orderByDesc('created_at');
 
     $user = request()->user();
     if ($user?->role !== 'admin') {

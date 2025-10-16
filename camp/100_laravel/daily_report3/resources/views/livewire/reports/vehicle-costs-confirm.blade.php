@@ -46,47 +46,57 @@ $proceed = function () {
 
     $userId = (int) Auth::id();
     DB::transaction(function () use ($userId, $daily, $vehicle) {
-        $report = \App\Models\DailyReport::create([
-            'user_id' => $userId,
-            'report_date' => now('Asia/Tokyo')->toDateString(),
-            'construction_id' => (string) ($daily['constructionId'] ?? ''),
-            'work_summary' => (string) ($daily['workSummary'] ?? ''),
-            'start_time' => filled($daily['startTime'] ?? null) ? $daily['startTime'] . ':00' : null,
-            'end_time' => filled($daily['endTime'] ?? null) ? $daily['endTime'] . ':00' : null,
-            'total_hours' => is_numeric($daily['adjustedHours'] ?? null) ? (float) $daily['adjustedHours'] : null,
-            'status' => 'submitted',
-        ]);
+        $reportDate = now('Asia/Tokyo')->toDateString();
+        $cid = (string) ($daily['constructionId'] ?? '');
+        $report = \App\Models\DailyReport::updateOrCreate(
+            [
+                'user_id' => $userId,
+                'report_date' => $reportDate,
+                'construction_id' => $cid,
+            ],
+            [
+                'work_summary' => (string) ($daily['workSummary'] ?? ''),
+                'start_time' => filled($daily['startTime'] ?? null) ? $daily['startTime'] . ':00' : null,
+                'end_time' => filled($daily['endTime'] ?? null) ? $daily['endTime'] . ':00' : null,
+                'total_hours' => is_numeric($daily['adjustedHours'] ?? null) ? (float) $daily['adjustedHours'] : null,
+                'status' => 'submitted',
+            ],
+        );
         // 車両未使用の場合は明細作成をスキップ
         if (!($vehicle['noVehicleUsed'] ?? false)) {
-            \App\Models\DailyReportVehicleCost::create([
-                'daily_report_id' => (int) $report->id,
-                'vehicle_id' => $vehicle['vehicleId'] ?? null,
-                'outbound_start' => filled($vehicle['moveStart'] ?? null) ? $vehicle['moveStart'] . ':00' : null,
-                'outbound_end' => filled($vehicle['moveEnd'] ?? null) ? $vehicle['moveEnd'] . ':00' : null,
-                'from_location' => $vehicle['fromLocation'] ?? null,
-                'to_location' => $vehicle['toLocation'] ?? null,
-                'distance_km' => is_numeric($vehicle['distanceKm'] ?? null) ? (float) $vehicle['distanceKm'] : null,
-                'toll_not_used' => (bool) ($vehicle['tollNotUsed'] ?? false),
-                'toll_entry' => $vehicle['tollEntry'] ?? null,
-                'toll_exit' => $vehicle['tollExit'] ?? null,
-                'toll_amount' => is_numeric($vehicle['tollAmount'] ?? null) ? (int) $vehicle['tollAmount'] : null,
-                'return_start' => filled($vehicle['returnMoveStart'] ?? null) ? $vehicle['returnMoveStart'] . ':00' : null,
-                'return_end' => filled($vehicle['returnMoveEnd'] ?? null) ? $vehicle['returnMoveEnd'] . ':00' : null,
-                'return_from_location' => $vehicle['returnFromLocation'] ?? null,
-                'return_to_location' => $vehicle['returnToLocation'] ?? null,
-                'return_distance_km' => is_numeric($vehicle['returnDistanceKm'] ?? null) ? (float) $vehicle['returnDistanceKm'] : null,
-                'return_toll_not_used' => (bool) ($vehicle['returnTollNotUsed'] ?? false),
-                'return_toll_entry' => $vehicle['returnTollEntry'] ?? null,
-                'return_toll_exit' => $vehicle['returnTollExit'] ?? null,
-                'return_toll_amount' => is_numeric($vehicle['returnTollAmount'] ?? null) ? (int) $vehicle['returnTollAmount'] : null,
-            ]);
+            \App\Models\DailyReportVehicleCost::updateOrCreate(
+                [
+                    'daily_report_id' => (int) $report->id,
+                ],
+                [
+                    'vehicle_id' => $vehicle['vehicleId'] ?? null,
+                    'outbound_start' => filled($vehicle['moveStart'] ?? null) ? $vehicle['moveStart'] . ':00' : null,
+                    'outbound_end' => filled($vehicle['moveEnd'] ?? null) ? $vehicle['moveEnd'] . ':00' : null,
+                    'from_location' => $vehicle['fromLocation'] ?? null,
+                    'to_location' => $vehicle['toLocation'] ?? null,
+                    'distance_km' => is_numeric($vehicle['distanceKm'] ?? null) ? (float) $vehicle['distanceKm'] : null,
+                    'toll_not_used' => (bool) ($vehicle['tollNotUsed'] ?? false),
+                    'toll_entry' => $vehicle['tollEntry'] ?? null,
+                    'toll_exit' => $vehicle['tollExit'] ?? null,
+                    'toll_amount' => is_numeric($vehicle['tollAmount'] ?? null) ? (int) $vehicle['tollAmount'] : null,
+                    'return_start' => filled($vehicle['returnMoveStart'] ?? null) ? $vehicle['returnMoveStart'] . ':00' : null,
+                    'return_end' => filled($vehicle['returnMoveEnd'] ?? null) ? $vehicle['returnMoveEnd'] . ':00' : null,
+                    'return_from_location' => $vehicle['returnFromLocation'] ?? null,
+                    'return_to_location' => $vehicle['returnToLocation'] ?? null,
+                    'return_distance_km' => is_numeric($vehicle['returnDistanceKm'] ?? null) ? (float) $vehicle['returnDistanceKm'] : null,
+                    'return_toll_not_used' => (bool) ($vehicle['returnTollNotUsed'] ?? false),
+                    'return_toll_entry' => $vehicle['returnTollEntry'] ?? null,
+                    'return_toll_exit' => $vehicle['returnTollExit'] ?? null,
+                    'return_toll_amount' => is_numeric($vehicle['returnTollAmount'] ?? null) ? (int) $vehicle['returnTollAmount'] : null,
+                ],
+            );
         }
     });
 
     session()->forget('daily_report_input');
     session()->forget('vehicle_cost_input');
     session()->flash('status', '日報を保存しました');
-    return redirect()->route('reports.search');
+    return redirect()->route('dashboard');
 };
 ?>
 

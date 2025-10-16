@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DailyReportVehicleCost extends Model
 {
@@ -50,5 +51,13 @@ class DailyReportVehicleCost extends Model
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
+    }
+
+    /**
+     * @return HasMany<DailyReportVehicleToll>
+     */
+    public function tolls(): HasMany
+    {
+        return $this->hasMany(DailyReportVehicleToll::class, 'vehicle_cost_id');
     }
 }
