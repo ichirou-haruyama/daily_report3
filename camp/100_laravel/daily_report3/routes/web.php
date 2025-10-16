@@ -2,14 +2,26 @@
 
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
+use App\Models\DailyReport;
 
 Route::get('/', function () {
-    return view('welcome');
+    return view('home');
 })->name('home');
 
-Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
+Route::get('dashboard', function () {
+    $query = DailyReport::with(['user', 'vehicleCost.tolls'])->orderByDesc('created_at');
+
+    $user = request()->user();
+    if ($user?->role !== 'admin') {
+        $query->where('user_id', $user?->id);
+    }
+
+    $reports = $query->paginate(20);
+
+    return view('dashboard', [
+        'reports' => $reports,
+    ]);
+})->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
@@ -28,6 +40,7 @@ Route::middleware(['auth'])->group(function () {
     // 作業日報 作成/車両費/その他
     Volt::route('reports/create', 'reports.create')->name('reports.create');
     Volt::route('reports/vehicle-costs', 'reports.vehicle-costs')->name('reports.vehicle_costs');
+    Volt::route('reports/vehicle-costs/confirm', 'reports.vehicle-costs-confirm')->name('reports.vehicle_costs.confirm');
     Volt::route('reports/other', 'reports.other')->name('reports.other');
 });
 

@@ -7,6 +7,7 @@ layout('components.layouts.app');
 title('作業日報 作成');
 
 state([
+    'constructionId' => '', // 検索画面からの工事ID
     'startTime' => '', // HH:MM
     'endTime' => '', // HH:MM
     'adjustedHours' => null, // 自動計算された労務時間（昼休/小休控除後）
@@ -15,10 +16,21 @@ state([
 ]);
 
 rules([
+    'constructionId' => ['nullable', 'string', 'max:64'],
     'startTime' => ['nullable', 'string'],
     'endTime' => ['nullable', 'string'],
     'workSummary' => ['nullable', 'string', 'max:2000'],
 ]);
+
+/**
+ * 初期化時にクエリパラメータの工事IDを保持
+ */
+$boot = function () {
+    $cid = (string) request()->query('construction_id', '');
+    if ($cid !== '') {
+        $this->constructionId = $cid;
+    }
+};
 
 /**
  * HH:MM を分に変換
@@ -75,6 +87,26 @@ $recalculate = function () use ($toMinutes) {
     $this->adjustedHours = round($adjusted / 60, 2);
     $this->showDetails = true;
 };
+
+/**
+ * 車両費入力へ進む前に、日報入力内容をセッションへ保存
+ */
+$proceedToVehicleCosts = function () {
+    // 表示上は $canProceed でガード済みだが、念のため簡易バリデーション
+    $this->validate([
+        'workSummary' => ['required', 'string', 'max:2000'],
+    ]);
+
+    session()->put('daily_report_input', [
+        'constructionId' => $this->constructionId,
+        'startTime' => $this->startTime,
+        'endTime' => $this->endTime,
+        'adjustedHours' => $this->adjustedHours,
+        'workSummary' => $this->workSummary,
+    ]);
+
+    return redirect()->route('reports.vehicle_costs');
+};
 ?>
 
 <section class="max-w-3xl mx-auto p-6">
@@ -84,6 +116,12 @@ $recalculate = function () use ($toMinutes) {
     </div>
 
     <div class="bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800 rounded-lg p-5 space-y-6">
+
+        @if (filled($constructionId))
+            <div class="text-sm text-gray-600 dark:text-gray-300">
+                選択中の工事ID: <span class="font-medium">{{ $constructionId }}</span>
+            </div>
+        @endif
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -120,8 +158,8 @@ $recalculate = function () use ($toMinutes) {
         @php($canProceed = $showDetails && filled($workSummary))
         @if ($canProceed)
             <div class="flex gap-3">
-                <a href="{{ route('reports.vehicle_costs') }}"
-                    class="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">車両費を入力する</a>
+                <button type="button" wire:click="proceedToVehicleCosts"
+                    class="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">車両費を入力する</button>
                 <a href="{{ route('reports.other') }}"
                     class="inline-flex items-center rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">車両費を入力せずその他へ</a>
             </div>
